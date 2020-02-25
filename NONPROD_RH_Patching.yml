@@ -1,0 +1,81 @@
+---
+- hosts: all
+  user: root
+
+
+  tasks:
+
+
+  - name: Create Ansible Dump Directory
+    file:
+     path: /root/ansibledump
+     state: directory
+    tags: 
+    - dumpcreate
+#  - name: Taking Backup of Config files
+#    copy: src={{ item.src }} dest={{ item.dest }}
+#    with_items:
+#     - { src: '/etc/fstab', dest: '/root/ansibledump/fstab_backup_02222020' }
+#     - { src: '/proc/mounts', dest: '/root/ansibledump/mounts_backup_02222020' }
+
+  - block:
+    - name: Cleaning the current update cache
+      command: yum clean all
+      args:
+       warn: no
+      become: true
+      tags: 
+      - yumclean 
+
+    - name: Refreshing the Subscription Manager
+      command: subscription-manager refresh
+      args:
+       warn: no
+      become: true
+      tags:
+      - subrefresh
+
+    - name: UPGRADING THE OPERATING SYSTEM TO LATEST MINOR VERSION
+      yum:
+        name="*"
+        state=latest
+      register: yum_update
+      tags: 
+      - yumupdate
+
+  - name: Reboot system after patching
+    command: shutdown -r +1  "Rebooting System after Monthly Patching. Please check change order CHG0040889 for more details "
+    async: 0
+    poll: 0
+    register: reboot_started
+    ignore_errors: true
+    tags:
+    - serverreboot
+
+
+  #- name: Wait for 1 minutes
+  #  pause:
+  #   minutes: 5
+  #  tags: 
+ #   - wait5min
+
+  - name: Waiting for servers to respond after the reboot.
+    #local_action:
+    wait_for_connection:
+     delay: 60
+     timeout: 300
+    when: reboot_started is succeeded
+    tags:
+    - connectcheck
+  
+  - name: Performing a mount all command to make sure all the mount points are mounted.
+    command: mount -a
+    args:
+     warn: no
+    become: true
+    tags: 
+    - mountall
+
+
+
+
